@@ -1,13 +1,76 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* fonts */
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;600&family=Inter:wght@300;400;600&display=swap');
+
+:root{
+  --bg1: #fff0f4;
+  --bg2: #f0e9ff;
+  --accent: #ff4b7a;
+  --ink: #352927;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* page */
+body {
+  @apply bg-gradient-to-br from-[#fff1f6] via-[#faf0ff] to-[#f0f3ff];
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--ink);
+  margin: 0;
 }
+
+/* panel styling */
+.panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,249,240,0.9));
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(24, 12, 24, 0.08);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+/* heart wrapper */
+.heart-wrap {
+  width: min(560px, 70vw);
+  height: min(560px, 70vw);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+/* hotspot container absolute inside svg area */
+.hotspot {
+  pointer-events: auto;
+}
+
+/* note card style — parchment + handwritten font */
+.note-card {
+  background: linear-gradient(180deg, #fffaf0, #fff4e6);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 30px rgba(28,10,20,0.08);
+  border: 1px solid rgba(0,0,0,0.03);
+  font-family: 'Dancing Script', cursive;
+  color: var(--ink);
+}
+
+/* readable button */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding: 8px 14px; border-radius: 10px; font-weight:600; cursor:pointer;
+}
+
+/* final letter - handwriting style */
+.final-letter {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.05rem;
+  line-height: 1.6rem;
+  color: var(--ink);
+}
+
+/* small helpers */
+.fade-in {
+  animation: fadeIn 0.45s ease both;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
