@@ -17,10 +17,10 @@ export default function HeartSoft() {
   // Initial anchors (viewBox space 0..200)
   const baseAnchors = useMemo(
     () => [
-      { id: 1, cx: 92,  cy: 60 },
+      { id: 1, cx: 92, cy: 60 },
       { id: 2, cx: 134, cy: 84 },
       { id: 3, cx: 102, cy: 102 },
-      { id: 4, cx: 74,  cy: 114 },
+      { id: 4, cx: 74, cy: 114 },
       { id: 5, cx: 102, cy: 140 },
     ],
     []
@@ -108,7 +108,7 @@ export default function HeartSoft() {
 
   return (
     <div className="w-full max-w-6xl mx-auto grid md:grid-cols-[1.1fr_.9fr] gap-8 items-start">
-      <audio ref={audioRef} src="/music.mp3" loop />
+      <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop />
       <div className="relative panel p-6">
         <div className="w-full aspect-square grid place-items-center">
           <motion.svg
