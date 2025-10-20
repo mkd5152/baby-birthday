@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Particle from "./Particle";
 
-export default function FinalLetter({onClose}) {
+export default function FinalLetter({ onClose }) {
   const fullText = `My Dearest Jaan,
 
 Happy Birthday. Today I send you my whole heart in sounds and soft light.
@@ -22,34 +22,103 @@ Moiz`;
 
   const [display, setDisplay] = useState("");
   const [particles, setParticles] = useState([]);
+  const scrollerRef = useRef(null);
 
-  useEffect(()=>{
+  // typewriter + particles
+  useEffect(() => {
     let i = 0;
-    const interval = setInterval(()=>{
-      setDisplay(prev => prev + fullText[i]);
+    const interval = setInterval(() => {
+      setDisplay((prev) => {
+        const next = prev + fullText[i];
+        // auto-scroll to keep caret in view
+        if (scrollerRef.current) {
+          scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+        }
+        return next;
+      });
       i++;
-      if(i >= fullText.length) clearInterval(interval);
-    }, 18); // adjust speed
-    const pInt = setInterval(()=> {
-      setParticles(prev => [...prev, { id: Math.random(), left: `${10 + Math.random()*80}%`, top: `${70 + Math.random()*10}%` }]);
-      if(particles.length > 80) setParticles([]);
+      if (i >= fullText.length) clearInterval(interval);
+    }, 18);
+
+    const pInt = setInterval(() => {
+      setParticles((prev) => {
+        const next = [
+          ...prev,
+          {
+            id: Math.random(),
+            left: `${10 + Math.random() * 80}%`,
+            top: `${70 + Math.random() * 10}%`,
+          },
+        ];
+        return next.length > 80 ? next.slice(-80) : next;
+      });
     }, 180);
-    return ()=> { clearInterval(interval); clearInterval(pInt); };
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(pInt);
+    };
     // eslint-disable-next-line
   }, []);
 
   return (
-    <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60">
-      <motion.div initial={{ scale:0.95 }} animate={{ scale:1 }} className="bg-parchment panel p-6 rounded-2xl max-w-3xl w-full relative">
-        <h3 className="text-2xl font-bold text-maroon mb-3">A Letter — just for you</h3>
-        <div className="final-letter whitespace-pre-wrap p-4 bg-white/60 rounded-lg shadow-inner" style={{ minHeight: 240 }}>
-          {display}
-        </div>
-        <div className="mt-4 flex justify-end gap-3">
-          <button onClick={onClose} className="btn bg-maroon text-white px-4 py-2 rounded-md">Close</button>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="fixed inset-0 z-50 bg-black/60 p-4 sm:p-6"
+      style={{
+        // respect iPhone safe areas
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.98 }}
+        animate={{ scale: 1 }}
+        className="mx-auto relative w-full max-w-3xl panel rounded-2xl flex flex-col"
+        style={{
+          // keep the whole panel inside the viewport on mobile
+          maxHeight: "calc(100dvh - 2rem)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Sticky header with always-visible Close */}
+        <div className="sticky top-0 z-10 bg-parchment/95 backdrop-blur-sm border-b border-black/5 px-6 py-4 rounded-t-2xl flex items-center">
+          <h3 className="text-lg sm:text-2xl font-bold text-maroon">
+            A Letter — just for you
+          </h3>
+          <button
+            onClick={onClose}
+            className="ml-auto inline-flex items-center justify-center w-9 h-9 rounded-full bg-maroon text-white"
+            aria-label="Close"
+          >
+            ×
+          </button>
         </div>
 
-        {particles.map(p => <Particle key={p.id} left={p.left} top={p.top} />)}
+        {/* Scrollable content */}
+        <div
+          ref={scrollerRef}
+          className="flex-1 overflow-auto px-6 pb-6"
+          style={{
+            // ensure last lines aren't hidden behind iOS home bar
+            paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          <div
+            className="final-letter whitespace-pre-wrap p-4 bg-white/70 rounded-lg shadow-inner"
+            style={{ minHeight: 240 }}
+          >
+            {display}
+          </div>
+        </div>
+
+        {/* Non-blocking particles */}
+        <div className="pointer-events-none absolute inset-0">
+          {particles.map((p) => (
+            <Particle key={p.id} left={p.left} top={p.top} />
+          ))}
+        </div>
       </motion.div>
     </motion.div>
   );
