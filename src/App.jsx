@@ -1,5 +1,5 @@
-import React from "react";
-import HeartSoft from "./components/HeartSoft";
+import React from 'react';
+import HeartSoft from './components/HeartSoft';
 
 export default function App(){
   return (

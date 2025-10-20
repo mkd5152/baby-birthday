@@ -1,142 +1,230 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useMemo, useRef, useState, useLayoutEffect } from "react";
 import { motion } from "framer-motion";
 import Hotspot from "./Hotspot";
 import NoteCard from "./NoteCard";
 import FinalLetter from "./FinalLetter";
 import { notes } from "../data/notes";
+import useAudioOnce from "./hooks/useAudioOnce";
+import usePrefersReducedMotion from "./hooks/usePrefersReducedMotion";
 
-export default function HeartSoft(){
+export default function HeartSoft() {
   const [selected, setSelected] = useState(null);
   const [visited, setVisited] = useState([]);
   const [showFinal, setShowFinal] = useState(false);
-  const audioRef = useRef(null);
-  const [audioAllowed, setAudioAllowed] = useState(false);
+  const { audioRef, allowAudio } = useAudioOnce();
+  const prefersReduced = usePrefersReducedMotion();
 
-  // attempt to autoplay once; will usually be blocked until interaction
-  useEffect(()=> {
-    if(audioRef.current){
-      const p = audioRef.current.play();
-      if(p && typeof p.then === "function") p.catch(()=>{/*blocked*/});
+  // Initial anchors (viewBox space 0..200)
+  const baseAnchors = useMemo(
+    () => [
+      { id: 1, cx: 92,  cy: 60 },
+      { id: 2, cx: 134, cy: 84 },
+      { id: 3, cx: 102, cy: 102 },
+      { id: 4, cx: 74,  cy: 114 },
+      { id: 5, cx: 102, cy: 140 }, // near the tip but *inside*
+    ],
+    []
+  );
+
+  const [anchors, setAnchors] = useState(baseAnchors);
+  const pathRef = useRef(null);
+
+  // --- auto-inset logic: push points inward if too close to the outline ---
+  useLayoutEffect(() => {
+    const path = pathRef.current;
+    if (!path) return;
+
+    const margin = 16; // keep at least this many SVG units from the edge (>= dot radius)
+    const len = path.getTotalLength();
+    const step = Math.max(0.5, len / 700); // sampling resolution
+
+    function nearestOnPath(x, y) {
+      let best = { d2: Infinity, p: null, t: 0 };
+      for (let d = 0; d <= len; d += step) {
+        const p = path.getPointAtLength(d);
+        const dx = x - p.x, dy = y - p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best.d2) best = { d2, p, t: d };
+      }
+      return best;
     }
-  }, []);
 
-  const hotspots = [
-    // coordinates are relative to container; tuned to the SVG path visually
-    { id: 1, x: "48%", y: "22%" },
-    { id: 2, x: "64%", y: "36%" },
-    { id: 3, x: "52%", y: "48%" },
-    { id: 4, x: "38%", y: "52%" },
-    { id: 5, x: "60%", y: "68%" }
-  ];
-
-  function openNote(id){
-    // play audio on first user click
-    if(audioRef.current && !audioAllowed){
-      audioRef.current.play().catch(()=>{});
-      setAudioAllowed(true);
+    function adjustPoint(a) {
+      const { p } = nearestOnPath(a.cx, a.cy);
+      const vx = a.cx - p.x;
+      const vy = a.cy - p.y;
+      const dist = Math.hypot(vx, vy);
+      // If dot is too close to the border, nudge inward along the local normal
+      if (dist < margin || dist === 0) {
+        // fallback inward direction approx towards heart center
+        let nx = vx, ny = vy;
+        if (dist === 0) { nx = a.cx - 100; ny = a.cy - 100; }
+        const nlen = Math.hypot(nx, ny) || 1;
+        const ux = nx / nlen, uy = ny / nlen;
+        const needed = margin - dist + 0.5; // tiny extra pad
+        return { ...a, cx: a.cx + ux * needed, cy: a.cy + uy * needed };
+      }
+      return a;
     }
-    const note = notes.find(n => n.id === id);
+
+    // First pass: inset from border
+    let pts = baseAnchors.map(adjustPoint);
+
+    // Second pass: tiny separation so pearls don’t collide visually
+    const minSep = 26;
+    for (let k = 0; k < 3; k++) {
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i], b = pts[j];
+          const dx = b.cx - a.cx, dy = b.cy - a.cy;
+          const d = Math.hypot(dx, dy) || 0.0001;
+          if (d < minSep) {
+            const push = (minSep - d) / 2;
+            const ux = dx / d, uy = dy / d;
+            // push away slightly but keep roughly same region
+            a.cx -= ux * push; a.cy -= uy * push;
+            b.cx += ux * push; b.cy += uy * push;
+          }
+        }
+      }
+      pts = pts.map(adjustPoint); // re-check border after separation
+    }
+
+    setAnchors(pts);
+  }, [baseAnchors]);
+
+  function openNote(id) {
+    allowAudio();
+    const note = notes.find((n) => n.id === id);
     setSelected(note);
-    setVisited(prev => prev.includes(id) ? prev : [...prev, id]);
-    if(visited.length + 1 === notes.length){
-      // reveal final after small delay
-      setTimeout(()=> setShowFinal(true), 700);
-    }
+    setVisited((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    const nextCount = visited.includes(id) ? visited.length : visited.length + 1;
+    if (nextCount === notes.length) setTimeout(() => setShowFinal(true), 600);
   }
 
-  function handleHeartClick(){
-    // open next unseen
-    const next = notes.find(n => !visited.includes(n.id));
-    if(next) openNote(next.id);
+  function handleHeartClick() {
+    const next = notes.find((n) => !visited.includes(n.id));
+    if (next) openNote(next.id);
     else setShowFinal(true);
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col md:flex-row gap-8 items-start">
+    <div className="w-full max-w-6xl mx-auto grid md:grid-cols-[1.1fr_.9fr] gap-8 items-start">
       <audio ref={audioRef} src="/music.mp3" loop />
 
-      <div className="heart-wrap panel p-6">
-        {/* realistic heart svg (soft gradients + subtle shadow) */}
-        <motion.svg
-          viewBox="0 0 200 200"
-          style={{ width: "min(520px, 70vw)", height: "min(520px, 70vw)", cursor: "pointer" }}
-          onClick={handleHeartClick}
-          initial={{ scale: 0.99 }}
-          animate={{ scale: [1, 1.02, 1], rotate: [0, -1.5, 0] }}
-          transition={{ duration: 3, repeat: Infinity }}
-        >
-          <defs>
-            <linearGradient id="hg" x1="0" x2="1">
-              <stop offset="0%" stopColor="#ff9db4"/>
-              <stop offset="50%" stopColor="#ff5b86"/>
-              <stop offset="100%" stopColor="#ff2b63"/>
-            </linearGradient>
-            <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="18" stdDeviation="20" floodColor="#ff2b63" floodOpacity="0.12"/>
-            </filter>
-          </defs>
+      <div className="relative panel p-6">
+        <div className="w-full aspect-square grid place-items-center">
+          <motion.svg
+            viewBox="0 0 200 200"
+            className="w-full h-full"
+            onClick={handleHeartClick}
+            initial={{ scale: 1 }}
+            animate={prefersReduced ? {} : { scale: [1, 1.02, 1], rotate: [0, -1.2, 0] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            role="img"
+            aria-label="Glass heart with memories"
+            style={{ cursor: "pointer" }}
+          >
+            <defs>
+              <linearGradient id="hg" x1="0" x2="1">
+                <stop offset="0%" stopColor="#ff9db4" />
+                <stop offset="50%" stopColor="#ff5b86" />
+                <stop offset="100%" stopColor="#ff2b63" />
+              </linearGradient>
+              <radialGradient id="spec" cx="0.3" cy="0.25" r="0.5">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+                <stop offset="60%" stopColor="#ffffff" stopOpacity="0.0" />
+              </radialGradient>
+              <filter id="innerShadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feOffset dx="0" dy="2" />
+                <feGaussianBlur stdDeviation="3" result="offset-blur" />
+                <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse" />
+                <feFlood floodColor="#b0123f" floodOpacity="0.25" result="color" />
+                <feComposite operator="in" in="color" in2="inverse" result="shadow" />
+                <feComposite operator="over" in="shadow" in2="SourceGraphic" />
+              </filter>
+              <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="16" stdDeviation="16" floodColor="#ff2b63" floodOpacity="0.18" />
+              </filter>
+              <filter id="noise" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
+                <feColorMatrix type="saturate" values="0" />
+                <feComponentTransfer>
+                  <feFuncA type="table" tableValues="0 0 0.04 0" />
+                </feComponentTransfer>
+              </filter>
 
-          <motion.path
-            d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
-            fill="url(#hg)"
-            stroke="#d61d55"
-            strokeWidth="0.6"
-            filter="url(#shadow)"
-            initial={{ pathLength: 1 }}
-            animate={{ translateY: [0, -6, 0] }}
-            transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
-          />
-          {/* soft light overlay */}
-          <motion.ellipse cx="85" cy="65" rx="36" ry="18" fill="rgba(255,255,255,0.08)" />
-          <motion.ellipse cx="124" cy="72" rx="18" ry="9" fill="rgba(255,255,255,0.06)" />
-        </motion.svg>
+              {/* Clip path keeps any overflow hidden, but auto-inset prevents touching it */}
+              <clipPath id="heartClip">
+                <path
+                  ref={pathRef}
+                  d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
+                />
+              </clipPath>
+            </defs>
 
-        {/* Hotspots placed absolutely over the svg container */}
-        <div className="absolute inset-0 pointer-events-none">
-          {hotspots.map((hs, idx)=> (
-            <Hotspot
-              key={hs.id}
-              x={hs.x}
-              y={hs.y}
-              index={idx+1}
-              visited={visited.includes(hs.id)}
-              onClick={() => openNote(hs.id)}
-            />
-          ))}
+            {/* Heart */}
+            <g filter="url(#shadow)">
+              <motion.path
+                d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
+                fill="url(#hg)"
+                stroke="#d61d55"
+                strokeWidth="0.6"
+                filter="url(#innerShadow)"
+                animate={prefersReduced ? {} : { translateY: [0, -5, 0] }}
+                transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
+              />
+              <ellipse cx="80" cy="66" rx="34" ry="16" fill="url(#spec)" />
+              <ellipse cx="126" cy="74" rx="14" ry="8" fill="rgba(255,255,255,.35)" />
+              <g filter="url(#noise)">
+                <path d="M0 0h200v200H0z" fill="#fff" opacity="0.08" />
+              </g>
+            </g>
+
+            {/* Hotspots (auto-inset, clipped just in case) */}
+            <g clipPath="url(#heartClip)">
+              {anchors.map((a, i) => (
+                <Hotspot
+                  key={a.id}
+                  cx={a.cx}
+                  cy={a.cy}
+                  index={i + 1}
+                  visited={visited.includes(a.id)}
+                  onClick={() => openNote(a.id)}
+                />
+              ))}
+            </g>
+          </motion.svg>
         </div>
 
-        <div className="mt-3 text-center text-sm text-gray-600">Click any glowing dot — or tap the heart to open next.</div>
+        <div className="mt-3 text-center text-sm text-gray-600">
+          Click a dot — or tap the heart to open the next memory.
+        </div>
       </div>
 
-      {/* right-side panel with notes list or selected note */}
-      <div className="w-full md:w-1/2 panel p-6">
+      <div className="w-full panel p-6">
         {selected ? (
-          <NoteCard note={selected} onClose={()=> setSelected(null)} />
+          <NoteCard note={selected} onClose={() => setSelected(null)} />
         ) : (
-          <div className="fade-in">
+          <div>
             <h2 className="text-2xl font-bold text-maroon">The Heart of Us</h2>
-            <p className="mt-3 text-gray-700">Explore the dots — each is a memory, a small secret, a little piece of my heart. Visit them all and I’ll unfold everything for you.</p>
-
-            <div className="mt-6 grid grid-cols-1 gap-3">
-              {notes.map(n => (
-                <button key={n.id} onClick={()=> openNote(n.id)} className="text-left panel p-3 rounded-md hover:scale-[1.02] transition">
+            <p className="mt-2 text-gray-700">Each pearl holds a memory. Visit them all to unlock the final letter.</p>
+            <div className="mt-5 grid gap-2">
+              {notes.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => openNote(n.id)}
+                  className="panel p-3 rounded-md text-left hover:scale-[1.015] transition focus-ring"
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-semibold text-maroon">{n.title}</div>
                       <div className="text-xs text-gray-500">{n.subtitle}</div>
                     </div>
-                    <div className="text-sm text-gray-400">{visited.includes(n.id) ? "Seen" : "Open"}</div>
+                    <div className="text-xs text-gray-400">{visited.includes(n.id) ? "Seen" : "Open"}</div>
                   </div>
                 </button>
               ))}
-            </div>
-
-            <div className="mt-6 flex gap-3">
-              <button onClick={handleHeartClick} className="btn bg-maroon text-white px-4 py-2 rounded-md">Open next realm</button>
-              <button onClick={()=>{
-                setVisited(notes.map(n=>n.id));
-                setTimeout(()=> setShowFinal(true), 600);
-              }} className="btn bg-white text-maroon border border-maroon/10 px-4 py-2 rounded-md">Reveal everything</button>
             </div>
           </div>
         )}
