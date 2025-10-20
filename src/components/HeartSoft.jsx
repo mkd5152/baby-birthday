@@ -21,7 +21,7 @@ export default function HeartSoft() {
       { id: 2, cx: 134, cy: 84 },
       { id: 3, cx: 102, cy: 102 },
       { id: 4, cx: 74,  cy: 114 },
-      { id: 5, cx: 102, cy: 140 }, // near the tip but *inside*
+      { id: 5, cx: 102, cy: 140 },
     ],
     []
   );
@@ -29,22 +29,21 @@ export default function HeartSoft() {
   const [anchors, setAnchors] = useState(baseAnchors);
   const pathRef = useRef(null);
 
-  // --- auto-inset logic: push points inward if too close to the outline ---
   useLayoutEffect(() => {
     const path = pathRef.current;
     if (!path) return;
 
-    const margin = 16; // keep at least this many SVG units from the edge (>= dot radius)
+    const margin = 16;
     const len = path.getTotalLength();
-    const step = Math.max(0.5, len / 700); // sampling resolution
+    const step = Math.max(0.5, len / 700);
 
     function nearestOnPath(x, y) {
-      let best = { d2: Infinity, p: null, t: 0 };
+      let best = { d2: Infinity, p: null };
       for (let d = 0; d <= len; d += step) {
         const p = path.getPointAtLength(d);
         const dx = x - p.x, dy = y - p.y;
         const d2 = dx * dx + dy * dy;
-        if (d2 < best.d2) best = { d2, p, t: d };
+        if (d2 < best.d2) best = { d2, p };
       }
       return best;
     }
@@ -54,23 +53,19 @@ export default function HeartSoft() {
       const vx = a.cx - p.x;
       const vy = a.cy - p.y;
       const dist = Math.hypot(vx, vy);
-      // If dot is too close to the border, nudge inward along the local normal
       if (dist < margin || dist === 0) {
-        // fallback inward direction approx towards heart center
         let nx = vx, ny = vy;
         if (dist === 0) { nx = a.cx - 100; ny = a.cy - 100; }
         const nlen = Math.hypot(nx, ny) || 1;
         const ux = nx / nlen, uy = ny / nlen;
-        const needed = margin - dist + 0.5; // tiny extra pad
+        const needed = margin - dist + 0.5;
         return { ...a, cx: a.cx + ux * needed, cy: a.cy + uy * needed };
       }
       return a;
     }
 
-    // First pass: inset from border
     let pts = baseAnchors.map(adjustPoint);
 
-    // Second pass: tiny separation so pearls don’t collide visually
     const minSep = 26;
     for (let k = 0; k < 3; k++) {
       for (let i = 0; i < pts.length; i++) {
@@ -81,29 +76,32 @@ export default function HeartSoft() {
           if (d < minSep) {
             const push = (minSep - d) / 2;
             const ux = dx / d, uy = dy / d;
-            // push away slightly but keep roughly same region
             a.cx -= ux * push; a.cy -= uy * push;
             b.cx += ux * push; b.cy += uy * push;
           }
         }
       }
-      pts = pts.map(adjustPoint); // re-check border after separation
+      pts = pts.map(adjustPoint);
     }
+
+    // ✅ Shift all dots slightly upward (adjust this offset to taste)
+    const yOffset = -10; // move up by 10 units
+    pts = pts.map(p => ({ ...p, cy: p.cy + yOffset }));
 
     setAnchors(pts);
   }, [baseAnchors]);
 
   function openNote(id) {
     allowAudio();
-    const note = notes.find((n) => n.id === id);
+    const note = notes.find(n => n.id === id);
     setSelected(note);
-    setVisited((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setVisited(prev => (prev.includes(id) ? prev : [...prev, id]));
     const nextCount = visited.includes(id) ? visited.length : visited.length + 1;
     if (nextCount === notes.length) setTimeout(() => setShowFinal(true), 600);
   }
 
   function handleHeartClick() {
-    const next = notes.find((n) => !visited.includes(n.id));
+    const next = notes.find(n => !visited.includes(n.id));
     if (next) openNote(next.id);
     else setShowFinal(true);
   }
@@ -111,7 +109,6 @@ export default function HeartSoft() {
   return (
     <div className="w-full max-w-6xl mx-auto grid md:grid-cols-[1.1fr_.9fr] gap-8 items-start">
       <audio ref={audioRef} src="/music.mp3" loop />
-
       <div className="relative panel p-6">
         <div className="w-full aspect-square grid place-items-center">
           <motion.svg
@@ -154,7 +151,6 @@ export default function HeartSoft() {
                 </feComponentTransfer>
               </filter>
 
-              {/* Clip path keeps any overflow hidden, but auto-inset prevents touching it */}
               <clipPath id="heartClip">
                 <path
                   ref={pathRef}
@@ -163,7 +159,6 @@ export default function HeartSoft() {
               </clipPath>
             </defs>
 
-            {/* Heart */}
             <g filter="url(#shadow)">
               <motion.path
                 d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
@@ -181,7 +176,6 @@ export default function HeartSoft() {
               </g>
             </g>
 
-            {/* Hotspots (auto-inset, clipped just in case) */}
             <g clipPath="url(#heartClip)">
               {anchors.map((a, i) => (
                 <Hotspot
@@ -208,7 +202,9 @@ export default function HeartSoft() {
         ) : (
           <div>
             <h2 className="text-2xl font-bold text-maroon">The Heart of Us</h2>
-            <p className="mt-2 text-gray-700">Each pearl holds a memory. Visit them all to unlock the final letter.</p>
+            <p className="mt-2 text-gray-700">
+              Each pearl holds a memory. Visit them all to unlock the final letter.
+            </p>
             <div className="mt-5 grid gap-2">
               {notes.map((n) => (
                 <button
@@ -221,7 +217,9 @@ export default function HeartSoft() {
                       <div className="font-semibold text-maroon">{n.title}</div>
                       <div className="text-xs text-gray-500">{n.subtitle}</div>
                     </div>
-                    <div className="text-xs text-gray-400">{visited.includes(n.id) ? "Seen" : "Open"}</div>
+                    <div className="text-xs text-gray-400">
+                      {visited.includes(n.id) ? "Seen" : "Open"}
+                    </div>
                   </div>
                 </button>
               ))}
