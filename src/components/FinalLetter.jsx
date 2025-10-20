@@ -9,7 +9,7 @@ Happy Birthday. Today I send you my whole heart in sounds and soft light.
 
 From our first messages that Christmas — when I realised in three days that life had changed — to the quiet of Haj where your hand steadied me, you have been my miracle.
 
-We walked through a storm and learned to stand beside one another when everything felt uncertain. Your strength and your quiet faith were the shelter I needed. I will always remember how you never stopped holding on.
+The storm hasn’t passed, but we keep walking — hand in hand, hearts steady in the rain. Your quiet faith shelters us more than you know, and I will never stop holding on with you.
 
 Your laugh, the way you ask 'are you okay?', your small, perfect gestures—these are the pieces of you I carry. They make my ordinary days sacred.
 
@@ -26,29 +26,36 @@ Moiz`;
 
   // typewriter + particles
   useEffect(() => {
-    let i = 0;
-    const interval = setInterval(() => {
-      setDisplay((prev) => {
-        const next = prev + fullText[i];
-        // auto-scroll to keep caret in view
-        if (scrollerRef.current) {
-          scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
-        }
-        return next;
-      });
-      i++;
-      if (i >= fullText.length) clearInterval(interval);
-    }, 18);
+    // Guard so this runs only once even under React.StrictMode
+    const startedRef = { current: false };
+    if (startedRef.current) return;
+    startedRef.current = true;
 
+    let i = 0;
+    const speed = 18;                  // ms per step
+    const total = fullText.length;
+
+    const interval = setInterval(() => {
+      // slice is safe: never adds "undefined"
+      setDisplay(fullText.slice(0, i + 1));
+
+      // keep caret in view
+      if (scrollerRef.current) {
+        scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+      }
+
+      i++;
+      if (i >= total) {
+        clearInterval(interval);
+      }
+    }, speed);
+
+    // particles (unchanged, but keep it inside this effect)
     const pInt = setInterval(() => {
-      setParticles((prev) => {
+      setParticles(prev => {
         const next = [
           ...prev,
-          {
-            id: Math.random(),
-            left: `${10 + Math.random() * 80}%`,
-            top: `${70 + Math.random() * 10}%`,
-          },
+          { id: Math.random(), left: `${10 + Math.random() * 80}%`, top: `${70 + Math.random() * 10}%` },
         ];
         return next.length > 80 ? next.slice(-80) : next;
       });
@@ -58,8 +65,7 @@ Moiz`;
       clearInterval(interval);
       clearInterval(pInt);
     };
-    // eslint-disable-next-line
-  }, []);
+  }, []); // <-- keep deps empty
 
   return (
     <motion.div
