@@ -14,7 +14,7 @@ module.exports = {
         soft: "0 10px 30px rgba(24, 12, 24, 0.12)",
       },
       fontFamily: {
-        cursive: ["'Dancing Script'", "cursive"],
+        serif: ["'Marcellus'", "serif"],
         body: ["Inter", "ui-sans-serif", "system-ui"],
       },
       keyframes: {
