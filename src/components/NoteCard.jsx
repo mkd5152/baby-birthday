@@ -9,7 +9,6 @@ export default function NoteCard({ note, onClose }){
           <div className="text-lg font-bold text-maroon">{note.title}</div>
           <div className="text-xs text-gray-500 mt-1">{note.subtitle}</div>
         </div>
-        <button onClick={onClose} className="btn btn-light focus-ring">Close</button>
       </div>
       <p className="mt-4 text-base font-cursive text-ink">{note.text}</p>
     </motion.div>
