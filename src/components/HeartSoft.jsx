@@ -30,9 +30,9 @@ export default function HeartSoft() {
   const [anchors, setAnchors] = useState(baseAnchors);
   const pathRef = useRef(null);
 
+  // Inset from border + spacing + gentle lift
   useLayoutEffect(() => {
-    const path = pathRef.current;
-    if (!path) return;
+    const path = pathRef.current; if (!path) return;
 
     const margin = 16;
     const len = path.getTotalLength();
@@ -64,7 +64,7 @@ export default function HeartSoft() {
       return a;
     };
 
-    // lift to use top space nicely
+    // lift dots a touch so the top doesn’t feel empty
     let pts = baseAnchors.map(p => ({ ...p, cy: p.cy - 10 }));
 
     // separation
@@ -114,28 +114,55 @@ export default function HeartSoft() {
     return p ? `${i === 0 ? "M" : "L"} ${p.cx} ${p.cy}` : "";
   }).join(" ");
 
-  // BIG visible hint
+  // Big visible hint
   function whisperHint() {
     if (!nextUnseen) return;
-    // center the heart on screen (mobile)
     const el = document.getElementById("heart-root");
     if (el && "scrollIntoView" in el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     setPulseId(nextUnseen.id);
-    // let it ping 3 times then stop
     setTimeout(() => setPulseId(null), 3200);
   }
 
-  // point to ping
   const pulsePoint = pulseId ? idToPoint(pulseId) : null;
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop muted autoPlay preload="auto" />
+      {/* Autoplay guarded; muted allows pre-play until interaction */}
+      <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop />
 
       {/* HEART PANEL */}
       <div className="panel p-4 sm:p-6" id="heart-root">
+        {/* --- Centered CREST TITLE (sits above the heart, not in a corner) --- */}
+        <div className="mb-3 sm:mb-4">
+          <div className="flex items-center justify-center gap-3">
+            <span className="hidden sm:block h-px w-10 bg-gradient-to-r from-transparent via-rose/40 to-transparent" />
+            <motion.h2
+              className="text-center font-serif text-lg sm:text-2xl text-maroon"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              style={{
+                textShadow:
+                  "0 1px 0 rgba(255,255,255,0.7), 0 6px 16px rgba(255,91,134,0.18)",
+              }}
+            >
+              The Heart of Us
+            </motion.h2>
+            <span className="hidden sm:block h-px w-10 bg-gradient-to-l from-transparent via-rose/40 to-transparent" />
+          </div>
+          {/* little shimmer underline — centered */}
+          <div className="mt-1 flex justify-center">
+            <motion.div
+              className="h-[2px] w-20 rounded-full bg-gradient-to-r from-transparent via-maroon to-transparent"
+              initial={{ opacity: 0.2 }}
+              animate={{ opacity: [0.2, 0.6, 0.2] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </div>
+        </div>
+
         <div className="w-full aspect-square grid place-items-center relative overflow-hidden">
           {/* Progress HUD */}
           <div className="absolute top-3 right-3 z-30 px-3 py-1 rounded-full bg-white/80 backdrop-blur text-maroon text-sm font-semibold shadow">
@@ -163,17 +190,6 @@ export default function HeartSoft() {
                 <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
                 <stop offset="60%" stopColor="#ffffff" stopOpacity="0" />
               </radialGradient>
-              <filter id="innerShadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feOffset dx="0" dy="2" />
-                <feGaussianBlur stdDeviation="3" result="offset-blur" />
-                <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse" />
-                <feFlood floodColor="#b0123f" floodOpacity="0.25" result="color" />
-                <feComposite operator="in" in="color" in2="inverse" result="shadow" />
-                <feComposite operator="over" in="shadow" in2="SourceGraphic" />
-              </filter>
-              <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="16" stdDeviation="16" floodColor="#ff2b63" floodOpacity="0.18" />
-              </filter>
               <clipPath id="heartClip">
                 <path
                   ref={pathRef}
@@ -183,21 +199,19 @@ export default function HeartSoft() {
             </defs>
 
             {/* Heart */}
-            <g filter="url(#shadow)">
-              <motion.path
-                d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
-                fill="url(#hg)"
-                stroke="#d61d55"
-                strokeWidth="0.6"
-                filter="url(#innerShadow)"
-                animate={prefersReduced ? {} : { translateY: [0, -5, 0] }}
-                transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
-              />
-              <ellipse cx="80" cy="66" rx="34" ry="16" fill="url(#spec)" />
-              <ellipse cx="126" cy="74" rx="14" ry="8" fill="rgba(255,255,255,.35)" />
-            </g>
+            <motion.path
+              d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
+              fill="url(#hg)"
+              stroke="#d61d55"
+              strokeWidth="0.6"
+              filter="drop-shadow(0 16px 24px rgba(255,91,134,0.2))"
+              animate={prefersReduced ? {} : { translateY: [0, -5, 0] }}
+              transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
+            />
+            <ellipse cx="80" cy="66" rx="34" ry="16" fill="url(#spec)" />
+            <ellipse cx="126" cy="74" rx="14" ry="8" fill="rgba(255,255,255,.35)" />
 
-            {/* Constellation + Pearls */}
+            {/* Constellation + pearls */}
             <g clipPath="url(#heartClip)">
               {pathD && (
                 <motion.path
@@ -213,7 +227,7 @@ export default function HeartSoft() {
                 />
               )}
 
-              {/* BIG ripple ping when “Follow the glow” is pressed */}
+              {/* Big ripple ping when “Follow the glow” is pressed */}
               {pulsePoint && (
                 <>
                   {[0, 0.25, 0.5].map((delay, k) => (
@@ -246,10 +260,19 @@ export default function HeartSoft() {
               ))}
             </g>
           </motion.svg>
+
+          {/* Ribbon chip */}
+          {!selected && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+              <div className="px-4 py-1.5 rounded-full bg-white/85 backdrop-blur text-maroon text-sm font-semibold shadow border border-maroon/10">
+                Tap a pearl to begin
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Docked note below the heart */}
-        <div className="mt-4">
+        {/* Docked note below */}
+        <div className="mt-5">
           {selected ? (
             <div className="panel p-4 rounded-xl bg-white/85 backdrop-blur">
               <NoteCard note={selected} onClose={() => setSelected(null)} />
