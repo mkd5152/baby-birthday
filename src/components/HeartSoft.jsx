@@ -11,16 +11,17 @@ export default function HeartSoft() {
   const [selected, setSelected] = useState(null);
   const [visited, setVisited] = useState([]);
   const [showFinal, setShowFinal] = useState(false);
+  const [pulseId, setPulseId] = useState(null);
   const { audioRef, allowAudio } = useAudioOnce();
   const prefersReduced = usePrefersReducedMotion();
 
-  // Initial anchors (viewBox space 0..200)
+  // Anchors in heart viewBox (0..200)
   const baseAnchors = useMemo(
     () => [
-      { id: 1, cx: 92, cy: 60 },
+      { id: 1, cx: 92,  cy: 60 },
       { id: 2, cx: 134, cy: 84 },
       { id: 3, cx: 102, cy: 102 },
-      { id: 4, cx: 74, cy: 114 },
+      { id: 4, cx: 74,  cy: 114 },
       { id: 5, cx: 102, cy: 140 },
     ],
     []
@@ -37,35 +38,36 @@ export default function HeartSoft() {
     const len = path.getTotalLength();
     const step = Math.max(0.5, len / 700);
 
-    function nearestOnPath(x, y) {
+    const nearestOnPath = (x, y) => {
       let best = { d2: Infinity, p: null };
       for (let d = 0; d <= len; d += step) {
         const p = path.getPointAtLength(d);
         const dx = x - p.x, dy = y - p.y;
-        const d2 = dx * dx + dy * dy;
+        const d2 = dx*dx + dy*dy;
         if (d2 < best.d2) best = { d2, p };
       }
       return best;
-    }
+    };
 
-    function adjustPoint(a) {
+    const inset = (a) => {
       const { p } = nearestOnPath(a.cx, a.cy);
-      const vx = a.cx - p.x;
-      const vy = a.cy - p.y;
+      const vx = a.cx - p.x, vy = a.cy - p.y;
       const dist = Math.hypot(vx, vy);
       if (dist < margin || dist === 0) {
         let nx = vx, ny = vy;
         if (dist === 0) { nx = a.cx - 100; ny = a.cy - 100; }
         const nlen = Math.hypot(nx, ny) || 1;
         const ux = nx / nlen, uy = ny / nlen;
-        const needed = margin - dist + 0.5;
-        return { ...a, cx: a.cx + ux * needed, cy: a.cy + uy * needed };
+        const push = margin - dist + 0.5;
+        return { ...a, cx: a.cx + ux * push, cy: a.cy + uy * push };
       }
       return a;
-    }
+    };
 
-    let pts = baseAnchors.map(adjustPoint);
+    // lift to use top space nicely
+    let pts = baseAnchors.map(p => ({ ...p, cy: p.cy - 10 }));
 
+    // separation
     const minSep = 26;
     for (let k = 0; k < 3; k++) {
       for (let i = 0; i < pts.length; i++) {
@@ -81,12 +83,8 @@ export default function HeartSoft() {
           }
         }
       }
-      pts = pts.map(adjustPoint);
+      pts = pts.map(inset);
     }
-
-    // ✅ Shift all dots slightly upward (adjust this offset to taste)
-    const yOffset = -10; // move up by 10 units
-    pts = pts.map(p => ({ ...p, cy: p.cy + yOffset }));
 
     setAnchors(pts);
   }, [baseAnchors]);
@@ -106,11 +104,44 @@ export default function HeartSoft() {
     else setShowFinal(true);
   }
 
+  const nextUnseen = notes.find(n => !visited.includes(n.id));
+  const visitedSorted = [...visited].sort((a, b) => a - b);
+  const idToPoint = (id) => anchors.find(a => a.id === id);
+
+  // Constellation path through visited pearls
+  const pathD = visitedSorted.map((id, i) => {
+    const p = idToPoint(id);
+    return p ? `${i === 0 ? "M" : "L"} ${p.cx} ${p.cy}` : "";
+  }).join(" ");
+
+  // BIG visible hint
+  function whisperHint() {
+    if (!nextUnseen) return;
+    // center the heart on screen (mobile)
+    const el = document.getElementById("heart-root");
+    if (el && "scrollIntoView" in el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setPulseId(nextUnseen.id);
+    // let it ping 3 times then stop
+    setTimeout(() => setPulseId(null), 3200);
+  }
+
+  // point to ping
+  const pulsePoint = pulseId ? idToPoint(pulseId) : null;
+
   return (
-    <div className="w-full max-w-6xl mx-auto grid md:grid-cols-[1.1fr_.9fr] gap-8 items-start">
-      <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop />
-      <div className="relative panel p-6">
-        <div className="w-full aspect-square grid place-items-center">
+    <div className="w-full max-w-4xl mx-auto">
+      <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop muted autoPlay preload="auto" />
+
+      {/* HEART PANEL */}
+      <div className="panel p-4 sm:p-6" id="heart-root">
+        <div className="w-full aspect-square grid place-items-center relative overflow-hidden">
+          {/* Progress HUD */}
+          <div className="absolute top-3 right-3 z-30 px-3 py-1 rounded-full bg-white/80 backdrop-blur text-maroon text-sm font-semibold shadow">
+            {visited.length}/{notes.length} memories
+          </div>
+
           <motion.svg
             viewBox="0 0 200 200"
             className="w-full h-full"
@@ -130,7 +161,7 @@ export default function HeartSoft() {
               </linearGradient>
               <radialGradient id="spec" cx="0.3" cy="0.25" r="0.5">
                 <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
-                <stop offset="60%" stopColor="#ffffff" stopOpacity="0.0" />
+                <stop offset="60%" stopColor="#ffffff" stopOpacity="0" />
               </radialGradient>
               <filter id="innerShadow" x="-50%" y="-50%" width="200%" height="200%">
                 <feOffset dx="0" dy="2" />
@@ -143,14 +174,6 @@ export default function HeartSoft() {
               <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
                 <feDropShadow dx="0" dy="16" stdDeviation="16" floodColor="#ff2b63" floodOpacity="0.18" />
               </filter>
-              <filter id="noise" x="-20%" y="-20%" width="140%" height="140%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
-                <feColorMatrix type="saturate" values="0" />
-                <feComponentTransfer>
-                  <feFuncA type="table" tableValues="0 0 0.04 0" />
-                </feComponentTransfer>
-              </filter>
-
               <clipPath id="heartClip">
                 <path
                   ref={pathRef}
@@ -159,6 +182,7 @@ export default function HeartSoft() {
               </clipPath>
             </defs>
 
+            {/* Heart */}
             <g filter="url(#shadow)">
               <motion.path
                 d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
@@ -171,12 +195,44 @@ export default function HeartSoft() {
               />
               <ellipse cx="80" cy="66" rx="34" ry="16" fill="url(#spec)" />
               <ellipse cx="126" cy="74" rx="14" ry="8" fill="rgba(255,255,255,.35)" />
-              <g filter="url(#noise)">
-                <path d="M0 0h200v200H0z" fill="#fff" opacity="0.08" />
-              </g>
             </g>
 
+            {/* Constellation + Pearls */}
             <g clipPath="url(#heartClip)">
+              {pathD && (
+                <motion.path
+                  d={pathD}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.95)"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.9, ease: "easeInOut" }}
+                  style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.6))" }}
+                />
+              )}
+
+              {/* BIG ripple ping when “Follow the glow” is pressed */}
+              {pulsePoint && (
+                <>
+                  {[0, 0.25, 0.5].map((delay, k) => (
+                    <motion.circle
+                      key={k}
+                      cx={pulsePoint.cx}
+                      cy={pulsePoint.cy}
+                      r={14}
+                      fill="none"
+                      stroke="rgba(255,91,134,0.9)"
+                      strokeWidth="2"
+                      initial={{ scale: 1, opacity: 0.9 }}
+                      animate={{ scale: 2.2, opacity: 0 }}
+                      transition={{ duration: 1.0, ease: "easeOut", delay }}
+                    />
+                  ))}
+                </>
+              )}
+
               {anchors.map((a, i) => (
                 <Hotspot
                   key={a.id}
@@ -184,6 +240,7 @@ export default function HeartSoft() {
                   cy={a.cy}
                   index={i + 1}
                   visited={visited.includes(a.id)}
+                  pulse={pulseId === a.id && !visited.includes(a.id)}
                   onClick={() => openNote(a.id)}
                 />
               ))}
@@ -191,41 +248,33 @@ export default function HeartSoft() {
           </motion.svg>
         </div>
 
-        <div className="mt-3 text-center text-sm text-gray-600">
-          Click a dot — or tap the heart to open the next memory.
-        </div>
-      </div>
-
-      <div className="w-full panel p-6">
-        {selected ? (
-          <NoteCard note={selected} onClose={() => setSelected(null)} />
-        ) : (
-          <div>
-            <h2 className="text-2xl font-bold text-maroon">The Heart of Us</h2>
-            <p className="mt-2 text-gray-700">
-              Each pearl holds a memory. Visit them all to unlock the final letter.
-            </p>
-            <div className="mt-5 grid gap-2">
-              {notes.map((n) => (
+        {/* Docked note below the heart */}
+        <div className="mt-4">
+          {selected ? (
+            <div className="panel p-4 rounded-xl bg-white/85 backdrop-blur">
+              <NoteCard note={selected} onClose={() => setSelected(null)} />
+              <div className="mt-3 flex justify-end gap-2">
                 <button
-                  key={n.id}
-                  onClick={() => openNote(n.id)}
-                  className="panel p-3 rounded-md text-left hover:scale-[1.015] transition focus-ring"
+                  className="btn bg-white text-maroon border border-maroon/20"
+                  onClick={() => setSelected(null)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-maroon">{n.title}</div>
-                      <div className="text-xs text-gray-500">{n.subtitle}</div>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {visited.includes(n.id) ? "Seen" : "Open"}
-                    </div>
-                  </div>
+                  Close
                 </button>
-              ))}
+                <button
+                  className="btn bg-maroon text-white"
+                  onClick={whisperHint}
+                  title="Make the next pearl glow"
+                >
+                  Follow the glow
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center text-sm text-gray-600">
+              Tap a pearl — or tap the heart to open the next memory.
+            </div>
+          )}
+        </div>
       </div>
 
       {showFinal && <FinalLetter onClose={() => setShowFinal(false)} />}
