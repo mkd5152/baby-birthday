@@ -65,7 +65,7 @@ Moiz`;
       clearInterval(interval);
       clearInterval(pInt);
     };
-  }, []); // <-- keep deps empty
+  }, [fullText]); // <-- keep deps empty
 
   return (
     <motion.div
