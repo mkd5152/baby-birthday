@@ -32,7 +32,7 @@ Moiz`;
     startedRef.current = true;
 
     let i = 0;
-    const speed = 18;                  // ms per step
+    const speed = 60;                  // ms per step
     const total = fullText.length;
 
     const interval = setInterval(() => {
