@@ -1,3 +1,4 @@
+// src/components/HeartSoft.jsx
 import React, {
   useMemo,
   useRef,
@@ -17,21 +18,22 @@ export default function HeartSoft() {
   const [selected, setSelected] = useState(null);
   const [visited, setVisited] = useState([]);
   const [showFinal, setShowFinal] = useState(false);
+  const [hasShownFinal, setHasShownFinal] = useState(false);
   const [pulseId, setPulseId] = useState(null);
 
-  // finale unlock
+  // Finale unlocking (countdown)
   const [unlocked, setUnlocked] = useState(false);
   const [unlockStartedAt, setUnlockStartedAt] = useState(null);
   const unlockTimerRef = useRef(null);
   const progressTickRef = useRef(null);
-  const [, forceTick] = useState(0);
+  const [, forceTick] = useState(0); // render tick for progress
 
   const { audioRef, allowAudio } = useAudioOnce();
   const prefersReduced = usePrefersReducedMotion();
 
-  const UNLOCK_DELAY_MS = 6000;
+  const UNLOCK_DELAY_MS = 6000; // 6s
 
-  // anchors (0..200 viewBox)
+  // --- anchors (0..200 viewBox), we lift a bit and auto-inset from border
   const baseAnchors = useMemo(
     () => [
       { id: 1, cx: 92, cy: 60 },
@@ -42,12 +44,12 @@ export default function HeartSoft() {
     ],
     []
   );
-
   const [anchors, setAnchors] = useState(baseAnchors);
   const pathRef = useRef(null);
 
   useLayoutEffect(() => {
-    const path = pathRef.current; if (!path) return;
+    const path = pathRef.current;
+    if (!path) return;
 
     const margin = 16;
     const len = path.getTotalLength();
@@ -79,10 +81,10 @@ export default function HeartSoft() {
       return a;
     };
 
-    // slight lift so top doesn’t feel empty
+    // lift up a bit so the heart's top isn’t empty
     let pts = baseAnchors.map(p => ({ ...p, cy: p.cy - 10 }));
 
-    // separation
+    // ensure spacing between dots
     const minSep = 26;
     for (let k = 0; k < 3; k++) {
       for (let i = 0; i < pts.length; i++) {
@@ -104,7 +106,7 @@ export default function HeartSoft() {
     setAnchors(pts);
   }, [baseAnchors]);
 
-  // smooth progress ring
+  // smooth progress ring tick while counting down
   useEffect(() => {
     if (!unlocked || showFinal) return;
     progressTickRef.current = setInterval(() => {
@@ -116,6 +118,7 @@ export default function HeartSoft() {
     };
   }, [unlocked, showFinal]);
 
+  // cleanup
   useEffect(() => {
     return () => {
       if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
@@ -123,13 +126,16 @@ export default function HeartSoft() {
     };
   }, []);
 
+  // mark that final has been shown at least once
+  useEffect(() => {
+    if (showFinal) setHasShownFinal(true);
+  }, [showFinal]);
+
   // interactions
   function openNote(id) {
     allowAudio();
-
     setVisited(prev => {
       const v = prev.includes(id) ? prev : [...prev, id];
-
       if (!unlocked && v.length === notes.length) {
         setUnlocked(true);
         setUnlockStartedAt(Date.now());
@@ -142,7 +148,6 @@ export default function HeartSoft() {
       }
       return v;
     });
-
     const note = notes.find(n => n.id === id);
     setSelected(note);
   }
@@ -180,15 +185,19 @@ export default function HeartSoft() {
     setPulseId(target.id);
     setTimeout(() => setPulseId(null), 3200);
   }
-
   const pulsePoint = pulseId ? idToPoint(pulseId) : null;
 
-  // progress math
+  // progress math + seconds
   const circumference = 2 * Math.PI * 10; // r=10
-  const progress =
-    unlocked && unlockStartedAt
-      ? Math.min(1, (Date.now() - unlockStartedAt) / UNLOCK_DELAY_MS)
+  const millisLeft =
+    unlocked && unlockStartedAt && !showFinal
+      ? Math.max(0, UNLOCK_DELAY_MS - (Date.now() - unlockStartedAt))
       : 0;
+  const progress =
+    unlocked && unlockStartedAt && !showFinal
+      ? 1 - millisLeft / UNLOCK_DELAY_MS
+      : 0;
+  const secsLeft = Math.ceil(millisLeft / 1000);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -196,60 +205,70 @@ export default function HeartSoft() {
 
       {/* PANEL */}
       <div className="panel p-4 sm:p-6" id="heart-root">
-        {/* Title */}
-        <div className="mb-3 sm:mb-4">
-          <div className="flex items-center justify-center gap-3">
-            <span className="hidden sm:block h-px w-10 bg-gradient-to-r from-transparent via-rose/40 to-transparent" />
-            <motion.h2
-              className="text-center font-serif text-lg sm:text-2xl text-maroon"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              style={{ textShadow: "0 1px 0 rgba(255,255,255,0.7), 0 6px 16px rgba(255,91,134,0.18)" }}
-            >
-              The Heart of Us
-            </motion.h2>
-            <span className="hidden sm:block h-px w-10 bg-gradient-to-l from-transparent via-rose/40 to-transparent" />
-          </div>
-          <div className="mt-1 flex justify-center">
-            <motion.div
-              className="h-[2px] w-20 rounded-full bg-gradient-to-r from-transparent via-maroon to-transparent"
-              initial={{ opacity: 0.2 }}
-              animate={{ opacity: [0.2, 0.6, 0.2] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </div>
-        </div>
+        {/* ===== Header row (title + pill) — own space so nothing overlaps ===== */}
+        <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+          <div className="w-8 shrink-0" /> {/* spacer to truly center the title */}
+          <motion.h2
+            className="text-center font-serif text-lg sm:text-2xl text-maroon"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            style={{ textShadow: "0 1px 0 rgba(255,255,255,0.7), 0 6px 16px rgba(255,91,134,0.18)" }}
+          >
+            The Heart of Us
+          </motion.h2>
 
-        {/* Heart + HUD */}
-        <div className="w-full aspect-square grid place-items-center relative overflow-hidden">
-          {/* Progress HUD (tap to reopen after unlock) */}
+          {/* Progress pill (never overlaps; small & right-aligned). 
+              After the letter has been shown once, tapping the pill reopens it. */}
           <button
             type="button"
-            onClick={() => unlocked && openFinalNow()}
-            className="absolute top-3 right-3 z-30 flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 backdrop-blur text-maroon text-sm font-semibold shadow hover:bg-white/95 active:scale-[0.98]"
-            aria-label={unlocked ? "Open final letter" : "Progress"}
+            onClick={() => (hasShownFinal && !selected ? setShowFinal(true) : null)}
+            className="shrink-0 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/85 backdrop-blur text-maroon text-xs sm:text-sm font-semibold shadow hover:bg-white/95 active:scale-[0.98]"
+            aria-label={hasShownFinal ? "Open final letter" : "Progress"}
           >
-            {visited.length}/{notes.length} memories
-            <div className="relative w-6 h-6">
+            {visited.length}/{notes.length} <span className="hidden sm:inline">memories</span>
+            <span className="relative inline-flex w-6 h-6">
               <svg viewBox="0 0 24 24" className="absolute inset-0">
                 <circle cx="12" cy="12" r="10" stroke="rgba(139,15,47,.25)" strokeWidth="2" fill="none" />
-                {unlocked && (
-                  <motion.circle
-                    cx="12" cy="12" r="10"
-                    stroke="rgb(139,15,47)"
-                    strokeWidth="2.5"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={circumference * (1 - progress)}
-                    strokeLinecap="round"
-                    fill="none"
-                  />
+                {unlocked && !hasShownFinal && !showFinal && (
+                  <>
+                    <circle
+                      cx="12" cy="12" r="10"
+                      stroke="rgb(139,15,47)" strokeWidth="2.5"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={circumference * (1 - progress)}
+                      strokeLinecap="round" fill="none"
+                    />
+                    <text x="12" y="13.5" textAnchor="middle" fontSize="8" fill="#8b0f2f" fontWeight="700">
+                      {secsLeft}
+                    </text>
+                  </>
+                )}
+                {hasShownFinal && (
+                  <text x="12" y="13.5" textAnchor="middle" fontSize="8" fill="#8b0f2f" fontWeight="700">↻</text>
                 )}
               </svg>
-            </div>
+            </span>
           </button>
+        </div>
 
-          {/* HEART */}
+        {/* ===== Countdown bar under the title (very visible) ===== */}
+        {unlocked && !showFinal && !hasShownFinal && (
+          <div className="mb-3 sm:mb-4">
+            <div className="h-2 w-full rounded-full bg-rose-200/50 overflow-hidden shadow-inner">
+              <motion.div
+                className="h-full bg-maroon"
+                style={{ width: `${Math.max(1, progress * 100)}%` }}
+              />
+            </div>
+            <div className="mt-1 text-center text-xs text-maroon font-semibold">
+              Opening the final letter in {secsLeft}s…
+            </div>
+          </div>
+        )}
+
+        {/* ===== Heart ===== */}
+        <div className="w-full aspect-square grid place-items-center relative overflow-hidden mt-2">
           <motion.svg
             viewBox="0 0 200 200"
             className="w-full h-full"
@@ -279,12 +298,9 @@ export default function HeartSoft() {
               </clipPath>
             </defs>
 
-            {/* Heart shape */}
             <motion.path
               d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
-              fill="url(#hg)"
-              stroke="#d61d55"
-              strokeWidth="0.6"
+              fill="url(#hg)" stroke="#d61d55" strokeWidth="0.6"
               filter="drop-shadow(0 16px 24px rgba(255,91,134,0.2))"
               animate={prefersReduced ? {} : { translateY: [0, -5, 0] }}
               transition={{ repeat: Infinity, duration: 3.6, ease: "easeInOut" }}
@@ -292,34 +308,23 @@ export default function HeartSoft() {
             <ellipse cx="80" cy="66" rx="34" ry="16" fill="url(#spec)" />
             <ellipse cx="126" cy="74" rx="14" ry="8" fill="rgba(255,255,255,.35)" />
 
-            {/* Constellation + pearls */}
             <g clipPath="url(#heartClip)">
               {visitedSorted.length > 0 && (
                 <motion.path
-                  d={pathD}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
+                  d={pathD} fill="none" stroke="rgba(255,255,255,0.95)"
+                  strokeWidth="2.2" strokeLinecap="round"
+                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
                   transition={{ duration: 0.9, ease: "easeInOut" }}
                   style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.6))" }}
                 />
               )}
 
-              {/* Ripple ping for hint */}
               {pulsePoint && (
                 <>
                   {[0, 0.25, 0.5].map((delay, k) => (
                     <motion.circle
-                      key={k}
-                      cx={pulsePoint.cx}
-                      cy={pulsePoint.cy}
-                      r={14}
-                      fill="none"
-                      stroke="rgba(255,91,134,0.9)"
-                      strokeWidth="2"
+                      key={k} cx={pulsePoint.cx} cy={pulsePoint.cy} r={14}
+                      fill="none" stroke="rgba(255,91,134,0.9)" strokeWidth="2"
                       initial={{ scale: 1, opacity: 0.9 }}
                       animate={{ scale: 2.2, opacity: 0 }}
                       transition={{ duration: 1.0, ease: "easeOut", delay }}
@@ -343,20 +348,20 @@ export default function HeartSoft() {
           </motion.svg>
         </div>
 
-        {/* *** MOBILE-FRIENDLY ACTION BAR (under the heart) *** */}
+        {/* ===== Actions & Docked Note ===== */}
         {!selected && (
-          <div className="mt-3 sm:mt-4">
-            {!unlocked ? (
+          <div className="mt-3 sm:mt-4 text-center">
+            {!hasShownFinal ? (
               <button
-                className="w-full px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
+                className="inline-flex px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
                 onClick={whisperHint}
               >
                 Follow the glow
               </button>
             ) : (
               <button
-                className="w-full px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
-                onClick={openFinalNow}
+                className="inline-flex px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
+                onClick={() => setShowFinal(true)}
               >
                 Read the letter again
               </button>
@@ -364,28 +369,24 @@ export default function HeartSoft() {
           </div>
         )}
 
-        {/* Docked note */}
         <div className="mt-5">
           {selected ? (
             <div className="panel p-4 rounded-xl bg-white/85 backdrop-blur">
               <NoteCard note={selected} onClose={handleCloseNote} />
-              {!unlocked && (
+              {!hasShownFinal ? (
                 <div className="mt-3 flex justify-end">
                   <button
-                    className="btn bg-maroon text-white"
+                    className="px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
                     onClick={whisperHint}
-                    title="Make the next pearl glow"
                   >
                     Follow the glow
                   </button>
                 </div>
-              )}
-              {unlocked && (
+              ) : (
                 <div className="mt-3 flex justify-end">
                   <button
-                    className="btn bg-maroon text-white"
-                    onClick={openFinalNow}
-                    title="Open the final letter"
+                    className="px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
+                    onClick={() => setShowFinal(true)}
                   >
                     Read the letter again
                   </button>
@@ -400,7 +401,14 @@ export default function HeartSoft() {
         </div>
       </div>
 
-      {showFinal && <FinalLetter onClose={() => setShowFinal(false)} />}
+      {/* Final letter modal */}
+      {showFinal && (
+        <FinalLetter
+          onClose={() => {
+            setShowFinal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
