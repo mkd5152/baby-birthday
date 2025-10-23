@@ -1,4 +1,10 @@
-import React, { useMemo, useRef, useState, useLayoutEffect } from "react";
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useLayoutEffect,
+  useEffect,
+} from "react";
 import { motion } from "framer-motion";
 import Hotspot from "./Hotspot";
 import NoteCard from "./NoteCard";
@@ -12,16 +18,26 @@ export default function HeartSoft() {
   const [visited, setVisited] = useState([]);
   const [showFinal, setShowFinal] = useState(false);
   const [pulseId, setPulseId] = useState(null);
+
+  // finale unlock
+  const [unlocked, setUnlocked] = useState(false);
+  const [unlockStartedAt, setUnlockStartedAt] = useState(null);
+  const unlockTimerRef = useRef(null);
+  const progressTickRef = useRef(null);
+  const [, forceTick] = useState(0);
+
   const { audioRef, allowAudio } = useAudioOnce();
   const prefersReduced = usePrefersReducedMotion();
 
-  // Anchors in heart viewBox (0..200)
+  const UNLOCK_DELAY_MS = 6000;
+
+  // anchors (0..200 viewBox)
   const baseAnchors = useMemo(
     () => [
-      { id: 1, cx: 92,  cy: 60 },
+      { id: 1, cx: 92, cy: 60 },
       { id: 2, cx: 134, cy: 84 },
       { id: 3, cx: 102, cy: 102 },
-      { id: 4, cx: 74,  cy: 114 },
+      { id: 4, cx: 74, cy: 114 },
       { id: 5, cx: 102, cy: 140 },
     ],
     []
@@ -30,7 +46,6 @@ export default function HeartSoft() {
   const [anchors, setAnchors] = useState(baseAnchors);
   const pathRef = useRef(null);
 
-  // Inset from border + spacing + gentle lift
   useLayoutEffect(() => {
     const path = pathRef.current; if (!path) return;
 
@@ -43,7 +58,7 @@ export default function HeartSoft() {
       for (let d = 0; d <= len; d += step) {
         const p = path.getPointAtLength(d);
         const dx = x - p.x, dy = y - p.y;
-        const d2 = dx*dx + dy*dy;
+        const d2 = dx * dx + dy * dy;
         if (d2 < best.d2) best = { d2, p };
       }
       return best;
@@ -64,7 +79,7 @@ export default function HeartSoft() {
       return a;
     };
 
-    // lift dots a touch so the top doesn’t feel empty
+    // slight lift so top doesn’t feel empty
     let pts = baseAnchors.map(p => ({ ...p, cy: p.cy - 10 }));
 
     // separation
@@ -89,52 +104,99 @@ export default function HeartSoft() {
     setAnchors(pts);
   }, [baseAnchors]);
 
+  // smooth progress ring
+  useEffect(() => {
+    if (!unlocked || showFinal) return;
+    progressTickRef.current = setInterval(() => {
+      forceTick(t => t + 1);
+    }, 100);
+    return () => {
+      if (progressTickRef.current) clearInterval(progressTickRef.current);
+      progressTickRef.current = null;
+    };
+  }, [unlocked, showFinal]);
+
+  useEffect(() => {
+    return () => {
+      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
+      if (progressTickRef.current) clearInterval(progressTickRef.current);
+    };
+  }, []);
+
+  // interactions
   function openNote(id) {
     allowAudio();
+
+    setVisited(prev => {
+      const v = prev.includes(id) ? prev : [...prev, id];
+
+      if (!unlocked && v.length === notes.length) {
+        setUnlocked(true);
+        setUnlockStartedAt(Date.now());
+        if (!unlockTimerRef.current) {
+          unlockTimerRef.current = setTimeout(() => {
+            setShowFinal(true);
+            unlockTimerRef.current = null;
+          }, UNLOCK_DELAY_MS);
+        }
+      }
+      return v;
+    });
+
     const note = notes.find(n => n.id === id);
     setSelected(note);
-    setVisited(prev => (prev.includes(id) ? prev : [...prev, id]));
-    const nextCount = visited.includes(id) ? visited.length : visited.length + 1;
-    if (nextCount === notes.length) setTimeout(() => setShowFinal(true), 600);
+  }
+
+  function openFinalNow() {
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+    setShowFinal(true);
   }
 
   function handleHeartClick() {
+    if (unlocked && !selected) { openFinalNow(); return; }
     const next = notes.find(n => !visited.includes(n.id));
     if (next) openNote(next.id);
-    else setShowFinal(true);
   }
+
+  function handleCloseNote() { setSelected(null); }
 
   const nextUnseen = notes.find(n => !visited.includes(n.id));
   const visitedSorted = [...visited].sort((a, b) => a - b);
   const idToPoint = (id) => anchors.find(a => a.id === id);
 
-  // Constellation path through visited pearls
   const pathD = visitedSorted.map((id, i) => {
     const p = idToPoint(id);
     return p ? `${i === 0 ? "M" : "L"} ${p.cx} ${p.cy}` : "";
   }).join(" ");
 
-  // Big visible hint
   function whisperHint() {
-    if (!nextUnseen) return;
+    const target = nextUnseen ?? notes[0];
+    if (!target) return;
     const el = document.getElementById("heart-root");
-    if (el && "scrollIntoView" in el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    setPulseId(nextUnseen.id);
+    if (el?.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPulseId(target.id);
     setTimeout(() => setPulseId(null), 3200);
   }
 
   const pulsePoint = pulseId ? idToPoint(pulseId) : null;
 
+  // progress math
+  const circumference = 2 * Math.PI * 10; // r=10
+  const progress =
+    unlocked && unlockStartedAt
+      ? Math.min(1, (Date.now() - unlockStartedAt) / UNLOCK_DELAY_MS)
+      : 0;
+
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Autoplay guarded; muted allows pre-play until interaction */}
       <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop />
 
-      {/* HEART PANEL */}
+      {/* PANEL */}
       <div className="panel p-4 sm:p-6" id="heart-root">
-        {/* --- Centered CREST TITLE (sits above the heart, not in a corner) --- */}
+        {/* Title */}
         <div className="mb-3 sm:mb-4">
           <div className="flex items-center justify-center gap-3">
             <span className="hidden sm:block h-px w-10 bg-gradient-to-r from-transparent via-rose/40 to-transparent" />
@@ -143,16 +205,12 @@ export default function HeartSoft() {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
-              style={{
-                textShadow:
-                  "0 1px 0 rgba(255,255,255,0.7), 0 6px 16px rgba(255,91,134,0.18)",
-              }}
+              style={{ textShadow: "0 1px 0 rgba(255,255,255,0.7), 0 6px 16px rgba(255,91,134,0.18)" }}
             >
               The Heart of Us
             </motion.h2>
             <span className="hidden sm:block h-px w-10 bg-gradient-to-l from-transparent via-rose/40 to-transparent" />
           </div>
-          {/* little shimmer underline — centered */}
           <div className="mt-1 flex justify-center">
             <motion.div
               className="h-[2px] w-20 rounded-full bg-gradient-to-r from-transparent via-maroon to-transparent"
@@ -163,12 +221,35 @@ export default function HeartSoft() {
           </div>
         </div>
 
+        {/* Heart + HUD */}
         <div className="w-full aspect-square grid place-items-center relative overflow-hidden">
-          {/* Progress HUD */}
-          <div className="absolute top-3 right-3 z-30 px-3 py-1 rounded-full bg-white/80 backdrop-blur text-maroon text-sm font-semibold shadow">
+          {/* Progress HUD (tap to reopen after unlock) */}
+          <button
+            type="button"
+            onClick={() => unlocked && openFinalNow()}
+            className="absolute top-3 right-3 z-30 flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 backdrop-blur text-maroon text-sm font-semibold shadow hover:bg-white/95 active:scale-[0.98]"
+            aria-label={unlocked ? "Open final letter" : "Progress"}
+          >
             {visited.length}/{notes.length} memories
-          </div>
+            <div className="relative w-6 h-6">
+              <svg viewBox="0 0 24 24" className="absolute inset-0">
+                <circle cx="12" cy="12" r="10" stroke="rgba(139,15,47,.25)" strokeWidth="2" fill="none" />
+                {unlocked && (
+                  <motion.circle
+                    cx="12" cy="12" r="10"
+                    stroke="rgb(139,15,47)"
+                    strokeWidth="2.5"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - progress)}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                )}
+              </svg>
+            </div>
+          </button>
 
+          {/* HEART */}
           <motion.svg
             viewBox="0 0 200 200"
             className="w-full h-full"
@@ -198,7 +279,7 @@ export default function HeartSoft() {
               </clipPath>
             </defs>
 
-            {/* Heart */}
+            {/* Heart shape */}
             <motion.path
               d="M100 28 C 78 2, 20 10, 28 60 C 36 110, 95 150, 100 160 C 105 150, 164 110, 172 60 C 180 10, 122 2, 100 28 Z"
               fill="url(#hg)"
@@ -213,7 +294,7 @@ export default function HeartSoft() {
 
             {/* Constellation + pearls */}
             <g clipPath="url(#heartClip)">
-              {pathD && (
+              {visitedSorted.length > 0 && (
                 <motion.path
                   d={pathD}
                   fill="none"
@@ -227,7 +308,7 @@ export default function HeartSoft() {
                 />
               )}
 
-              {/* Big ripple ping when “Follow the glow” is pressed */}
+              {/* Ripple ping for hint */}
               {pulsePoint && (
                 <>
                   {[0, 0.25, 0.5].map((delay, k) => (
@@ -260,37 +341,56 @@ export default function HeartSoft() {
               ))}
             </g>
           </motion.svg>
-
-          {/* Ribbon chip */}
-          {!selected && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-              <div className="px-4 py-1.5 rounded-full bg-white/85 backdrop-blur text-maroon text-sm font-semibold shadow border border-maroon/10">
-                Tap a pearl to begin
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Docked note below */}
+        {/* *** MOBILE-FRIENDLY ACTION BAR (under the heart) *** */}
+        {!selected && (
+          <div className="mt-3 sm:mt-4">
+            {!unlocked ? (
+              <button
+                className="w-full px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
+                onClick={whisperHint}
+              >
+                Follow the glow
+              </button>
+            ) : (
+              <button
+                className="w-full px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
+                onClick={openFinalNow}
+              >
+                Read the letter again
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Docked note */}
         <div className="mt-5">
           {selected ? (
             <div className="panel p-4 rounded-xl bg-white/85 backdrop-blur">
-              <NoteCard note={selected} onClose={() => setSelected(null)} />
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  className="btn bg-white text-maroon border border-maroon/20"
-                  onClick={() => setSelected(null)}
-                >
-                  Close
-                </button>
-                <button
-                  className="btn bg-maroon text-white"
-                  onClick={whisperHint}
-                  title="Make the next pearl glow"
-                >
-                  Follow the glow
-                </button>
-              </div>
+              <NoteCard note={selected} onClose={handleCloseNote} />
+              {!unlocked && (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    className="btn bg-maroon text-white"
+                    onClick={whisperHint}
+                    title="Make the next pearl glow"
+                  >
+                    Follow the glow
+                  </button>
+                </div>
+              )}
+              {unlocked && (
+                <div className="mt-3 flex justify-end">
+                  <button
+                    className="btn bg-maroon text-white"
+                    onClick={openFinalNow}
+                    title="Open the final letter"
+                  >
+                    Read the letter again
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center text-sm text-gray-600">
