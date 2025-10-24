@@ -203,10 +203,10 @@ export default function HeartSoft() {
     <div className="w-full max-w-4xl mx-auto">
       <audio ref={audioRef} src={`${process.env.PUBLIC_URL}/music.mp3`} loop />
 
-      {/* PANEL */}
-      <div className="panel p-4 sm:p-6" id="heart-root">
+      {/* PANEL (slightly tighter padding on mobile) */}
+      <div className="panel p-3 sm:p-5" id="heart-root">
         {/* ===== Header row (title + pill) — own space so nothing overlaps ===== */}
-        <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+        <div className="flex items-center justify-between gap-3 mb-2 sm:mb-3">
           <div className="w-8 shrink-0" /> {/* spacer to truly center the title */}
           <motion.h2
             className="text-center font-serif text-lg sm:text-2xl text-maroon"
@@ -218,8 +218,7 @@ export default function HeartSoft() {
             The Heart of Us
           </motion.h2>
 
-          {/* Progress pill (never overlaps; small & right-aligned). 
-              After the letter has been shown once, tapping the pill reopens it. */}
+          {/* Progress pill */}
           <button
             type="button"
             onClick={() => (hasShownFinal && !selected ? setShowFinal(true) : null)}
@@ -254,7 +253,7 @@ export default function HeartSoft() {
 
         {/* ===== Countdown bar under the title (very visible) ===== */}
         {unlocked && !showFinal && !hasShownFinal && (
-          <div className="mb-3 sm:mb-4">
+          <div className="mb-2 sm:mb-3">
             <div className="h-2 w-full rounded-full bg-rose-200/50 overflow-hidden shadow-inner">
               <motion.div
                 className="h-full bg-maroon"
@@ -267,8 +266,8 @@ export default function HeartSoft() {
           </div>
         )}
 
-        {/* ===== Heart ===== */}
-        <div className="w-full aspect-square grid place-items-center relative overflow-hidden mt-2">
+        {/* ===== Heart (shorter & no extra top margin) ===== */}
+        <div className="w-full aspect-[1/1.05] grid place-items-center relative overflow-hidden mt-0 sm:mt-1">
           <motion.svg
             viewBox="0 0 200 200"
             className="w-full h-full"
@@ -350,7 +349,7 @@ export default function HeartSoft() {
 
         {/* ===== Actions & Docked Note ===== */}
         {!selected && (
-          <div className="mt-3 sm:mt-4 text-center">
+          <div className="mt-2 sm:mt-3 text-center">
             {!hasShownFinal ? (
               <button
                 className="inline-flex px-4 py-2 rounded-full bg-maroon text-white text-sm font-semibold shadow active:scale-[0.98]"
@@ -369,7 +368,7 @@ export default function HeartSoft() {
           </div>
         )}
 
-        <div className="mt-5">
+        <div className="mt-2 sm:mt-3">
           {selected ? (
             <div className="panel p-4 rounded-xl bg-white/85 backdrop-blur">
               <NoteCard note={selected} onClose={handleCloseNote} />
